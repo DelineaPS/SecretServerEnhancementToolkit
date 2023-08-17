@@ -91,6 +91,7 @@ function global:Connect-SecretServerInstance
         $LastError.Payload = $Body
         $LastError.Response = $InitialResponse
         $LastError.ErrorMessage = $_.Exception.Message
+		$LastError.Exception = $_
         $global:LastError = $LastError
         Throw $_.Exception
 	}
@@ -102,7 +103,7 @@ function global:Connect-SecretServerInstance
 
 		$Connection = New-Object -TypeName PSCustomObject
 
-		$Connection | Add-Member -MemberType NoteProperty -Name PodFqdn -Value $Url
+		$Connection | Add-Member -MemberType NoteProperty -Name Url -Value $Url
 		$Connection | Add-Member -MemberType NoteProperty -Name User -Value $User
 		$Connection | Add-Member -MemberType NoteProperty -Name SessionStartTime -Value $InitialResponse.Headers.Date
 		#$Connection | Add-Member -MemberType NoteProperty -Name Response -Value $InitialResponse
@@ -117,7 +118,16 @@ function global:Connect-SecretServerInstance
 		# setting the splat
 		$global:SecretServerSessionInformation = @{ Headers = $headers; ContentType = "application/json" }
 
-		return ($Connection | Select-Object User,PodFqdn | Format-List)
+		# if the $SecretServerConnections variable does not contain this Connection, add it
+		if (-Not ($SecretServerConnections | Where-Object {$_.Url -eq $Connection.Url}))
+		{
+			# add a new SecretServerConnection object and add it to our $SecretServerConnectionsList
+			$obj = New-Object SecretServerConnection -ArgumentList ($Connection.Url,$Connection,$global:SecretServerSessionInformation)
+			
+			$global:SecretServerConnections.Add($obj) | Out-Null
+		}
+
+		return ($Connection | Select-Object User,Url | Format-List)
 	}# if ($InitialResponse.StatusCode -eq 200)
 	else
 	{

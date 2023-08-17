@@ -56,7 +56,7 @@ foreach ($script in $SecretServerEnhancementToolkitScripts)
 $global:SecretServerEnhancementToolkitScriptBlocks = $SecretServerEnhancementToolkitScriptBlocks
 
 # initializing a List[SecretServerConnection] if it is empty or null
-#$global:SecretServerConnections = New-Object System.Collections.Generic.List[SecretServerConnection]
+$global:SecretServerConnections = New-Object System.Collections.Generic.List[SecretServerConnection]
 
 #######################################
 #endregion ############################

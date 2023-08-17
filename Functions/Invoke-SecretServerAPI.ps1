@@ -50,7 +50,7 @@ function global:Invoke-SecretServerAPI
     )# param
 
 	# setting the url based on our PlatformConnection information
-    $uri = ("https://{0}/{1}" -f $global:SecretServerConnection.PodFqdn, $APICall)
+    $uri = ("https://{0}/{1}" -f $global:SecretServerConnection.Url, $APICall)
 
 	# Try
     Try
@@ -79,6 +79,7 @@ function global:Invoke-SecretServerAPI
         $LastError.Payload = $Body
         $LastError.Response = $Response
         $LastError.ErrorMessage = $_.Exception.Message
+		$LastError.Exception = $_
         $global:LastError = $LastError
         Throw $_.Exception
     }

@@ -4,6 +4,7 @@ class SSAPIException : System.Exception
     [System.String]$APICall
     [System.String]$Payload
     [System.String]$ErrorMessage
+	[PSCustomObject]$Exception
     [PSCustomObject]$Response
 
     SSAPIException([System.String]$message) : base ($message) {}
