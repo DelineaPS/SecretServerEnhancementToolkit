@@ -106,8 +106,7 @@ function global:Connect-SecretServerInstance
 		$Connection | Add-Member -MemberType NoteProperty -Name Url -Value $Url
 		$Connection | Add-Member -MemberType NoteProperty -Name User -Value $User
 		$Connection | Add-Member -MemberType NoteProperty -Name SessionStartTime -Value $InitialResponse.Headers.Date
-		#$Connection | Add-Member -MemberType NoteProperty -Name Response -Value $InitialResponse
-
+		
 		# Set Connection as global
 		$global:SecretServerConnection = $Connection
 
