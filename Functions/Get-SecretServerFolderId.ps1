@@ -1,5 +1,5 @@
 ###########
-#region ### global:Get-SecretServerFolder # Gets the Secret Server Folder Id specified by name.
+#region ### global:Get-SecretServerFolderId # Gets the Secret Server Folder Id specified by name.
 ###########
 function global:Get-SecretServerFolderId
 {
@@ -45,6 +45,6 @@ function global:Get-SecretServerFolderId
 
 	# otherwise return $false
 	return $false
-}# function global:Get-SecretServerFolder
+}# function global:Get-SecretServerFolderId
 #endregion
 ###########
