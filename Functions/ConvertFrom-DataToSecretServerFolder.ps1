@@ -43,6 +43,12 @@ function global:ConvertFrom-DataToSecretServerFolder
         # new empty SecretServerFolder object
         $obj = New-Object SecretServerFolder -ArgumentList $secretserverfolder
 
+		# adding Folder Permissions if there is something to add
+		if (($secretserverfolder.FolderPermissions | Measure-Object | Select-Object -ExpandProperty Count) -gt 0)
+		{
+			$obj.FolderPermissions.AddRange(@($secretserverfolder.FolderPermissions)) | Out-Null
+		}
+
         # add this object to our return ArrayList
         $NewSecretServerFolders.Add($obj) | Out-Null
     }# foreach ($secretserverfolder in $DataFolders)

@@ -9,6 +9,7 @@ class SecretServerFolder
 	[System.Int32]$SecretPolicyId
 	[System.Boolean]$inheritSecretPolicy
 	[System.Boolean]$inheritPermissions
+	[System.Collections.ArrayList]$FolderPermissions = @{}
 
 	SecretServerFolder () {}
 
@@ -23,4 +24,9 @@ class SecretServerFolder
 		$this.inheritSecretPolicy = $f.inheritSecretPolicy
 		$this.inheritPermissions  = $f.inheritPermissions
 	}# SecretServerFolder ($f)
+
+	addFolderPermission($p)
+	{
+		$this.FolderPermissions.AddRange(@($p)) | Out-Null
+	}
 }# class SecretServerFolder

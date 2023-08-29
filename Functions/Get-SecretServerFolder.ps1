@@ -135,6 +135,9 @@ function global:Get-SecretServerFolder
 	# jobs ArrayList
 	$Jobs = New-Object System.Collections.ArrayList
 
+	# zeroing counters
+	[System.Int32]$g, [System.Int32]$p = 0
+
 	# for each CloudSuiteAccount passed
 	foreach ($queryobject in $basequery)
 	{
@@ -162,6 +165,10 @@ function global:Get-SecretServerFolder
 			$global:SecretServerSessionInformation               = $SecretServerSessionInformation
 
 			$folder = New-Object SecretServerFolder -ArgumentList ($queryobject)
+
+			$folderpermissions = Get-SecretServerFolderPermission -Id $folder.Id
+
+			$folder.addFolderPermission($folderpermissions)
 
 			return $folder
 	
