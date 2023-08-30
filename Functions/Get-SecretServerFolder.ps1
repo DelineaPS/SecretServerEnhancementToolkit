@@ -25,6 +25,9 @@ function global:Get-SecretServerFolder
 	.PARAMETER Id
 	Get Secret Server Folders by this Id.
 
+	.PARAMETER FolderPath
+	Gets a Secret Server Folder by explicit folder path.
+
 	.PARAMETER IncludeSubFolders
 	Get all Secret Server Folders under the specified folder. Only works with the -Id parameter.
 
@@ -55,6 +58,10 @@ function global:Get-SecretServerFolder
 	This function will get the folder with the Id of 4, including subfolders.
 
 	.EXAMPLE
+	C:PS> Get-SecretServerFolder -FolderPath "Personal Folders\My RootFolder"
+	This function will get the folder called "My RootFolder" from your Personal Folders".
+
+	.EXAMPLE
 	C:\PS> Get-SecretServerFolder -ParentFolderId 1
 	This function will get all the folders under the Folder that has the FolderID of 1.
 
@@ -70,8 +77,12 @@ function global:Get-SecretServerFolder
 
 		[Parameter(Mandatory = $true, HelpMessage = "The ID of the Folder to search/get.", ParameterSetName = "Id")]
 		[System.Int32]$Id,
+
+		[Parameter(Mandatory = $true, HelpMessage = "The Folder Path of the Folder to search/get.", ParameterSetName = "FolderPath")]
+		[System.String]$FolderPath,
 		
 		[Parameter(Mandatory = $false, HelpMessage = "Include subfolders from the ID search.", ParameterSetName = "Id")]
+		[Parameter(Mandatory = $false, HelpMessage = "The ID of the Folder to search/get.", ParameterSetName = "FolderPath")]
 		[Switch]$IncludeSubFolders,
 
 		[Parameter(Mandatory = $true, HelpMessage = "Search for this folder by ID, and only return sub folders.", ParameterSetName ="ParentFolderId")]
@@ -99,9 +110,25 @@ function global:Get-SecretServerFolder
 								$filter = ("/{0}" -f $Id)
 								if ($IncludeSubFolders.IsPresent)
 								{
-									$filter = ("{0}&getAllChildren=true" -f $filter)
+									$filter = ("{0}?getAllChildren=true" -f $filter)
 								}
 								break
+							}
+		"FolderPath"        { 
+								# replace forward slashs with backslashes
+								$FolderPath = $FolderPath -replace '/','\'
+
+								# if the first character is not a backslash, add a backslash at the beginning of the string
+								if ($FolderPath[0] -ne "\") { $FolderPath = ("\{0}" -f $FolderPath) }
+								$filter = ("/0?folderPath={0}" -f $FolderPath)
+								if ($IncludeSubFolders.IsPresent)
+								{
+									$filter = ("{0}&getAllChildren=true" -f $filter)
+								}
+
+								# if the FolderPath ends in a backslash, truncate it
+								if ($filter[-1] -eq "\") { $filter = $filter.Substring(0,$filter.Length - 1) }
+								break 
 							}
 		default             { $filter = "?"; break }
 	}# Switch ($PSCmdlet.ParameterSetName)
@@ -116,11 +143,23 @@ function global:Get-SecretServerFolder
 	# making the query
     $basequery = Invoke-SecretServerAPI -APICall ("api/v1/folders{0}" -f $filter)
 
+	# setting a new ArrayList for query results to deal with a childFolders property
+	$queryresults = New-Object System.Collections.ArrayList
+
 	# if the returned API call has the records property, more than one object was returned
 	if ($basequery.records)
 	{
-		# set that as our new base objects
-		$basequery = $basequery.records
+		$queryresults.AddRange(@($basequery.records)) | Out-Null
+	}
+	# else if the childFolders property exists, then the child folders were returned
+	elseif ($basequery.childFolders)
+	{
+		$queryresults.Add(($basequery | Select-Object -Property * -ExcludeProperty childFolders)) | Out-Null
+		$queryresults.AddRange(@($basequery.childFolders)) | Out-Null
+	}
+	else
+	{
+		$queryresults.Add($basequery) | Out-Null
 	}
 
 	# multithread start
@@ -139,13 +178,13 @@ function global:Get-SecretServerFolder
 	[System.Int32]$g, [System.Int32]$p = 0
 
 	# for each CloudSuiteAccount passed
-	foreach ($queryobject in $basequery)
+	foreach ($queryobject in $queryresults)
 	{
 		$PowerShell = [PowerShell]::Create()
 		$PowerShell.RunspacePool = $RunspacePool
 	
 		# Counter for the account objects
-		$g++; Write-Progress -Activity "Getting Folders" -Status ("{0} out of {1} Complete" -f $g,$basequery.Count) -PercentComplete ($g/($basequery | Measure-Object | Select-Object -ExpandProperty Count)*100)
+		$g++; Write-Progress -Activity "Getting Folders" -Status ("{0} out of {1} Complete" -f $g,$queryresults.Count) -PercentComplete ($g/($queryresults | Measure-Object | Select-Object -ExpandProperty Count)*100)
 		
 		# for each script in our SecretServerEnhancementToolkitScriptBlocks
 		foreach ($script in $global:SecretServerEnhancementToolkitScriptBlocks)
