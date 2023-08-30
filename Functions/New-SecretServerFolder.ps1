@@ -1,0 +1,124 @@
+###########
+#region ### global:New-SecretServerFolder # Creates a new Secret Server Folder in the connected Secret Server instance.
+###########
+function global:New-SecretServerFolder
+{
+    <#
+    .SYNOPSIS
+    Creates a new Secret Server Folder.
+
+    .DESCRIPTION
+	This function creates a new Secret Serfer Folder in the connected Secret Server instance. By default this function
+	will attempt to create a new Root level folder if just the name is specified.
+
+	Otherwise, the Parent Folder can be specified as a string provided with the -ParentFolderPath parameter.
+
+	This function returns a SecretServerFolder class object if successful. This function will return $false if a new
+	folder was not created.
+
+	.INPUTS
+    None. You can't redirect or pipe input to this function.
+
+    .OUTPUTS
+    This function returns a SecretServerFolder class object if it successfully creates a folder. Otherwise it will
+	return $false if it does not.
+
+    .PARAMETER Name
+    The name of the Secret Server Folder to create.
+
+	.PARAMETER ParentFolderPath
+	The Folder Path name of the desired Parent Folder.
+
+	.PARAMETER InheritPermissions
+	Should permissions be inherited from the Parent Folder. Default is true.
+
+	.PARAMETER InheritSecretPolicy
+	Should Secret Policy be inherited from the Parent Folder. Default is true.
+
+	.EXAMPLE
+    C:\PS> New-SecretServerFolder -Name "My Team Folder"
+    This function will create a new Root-level Secret Server Folder called "My Team Folder".
+
+	.EXAMPLE
+	C:\PS> New-SecretServerFolder -Name "WidgetApp Root Accounts" -ParentPath "Apps\WidgetApp"
+	This function will create a new Secret Server Folder in the "Apps\WidgetApps" directory named "WidgetApp Root Accounts."
+	
+    #>
+    [CmdletBinding(DefaultParameterSetName="RootFolder")]
+    param
+    (
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "The name of the Folder to create.", ParameterSetName = "RootFolder")]
+		[Parameter(Mandatory = $true, Position = 0, HelpMessage = "The name of the Folder to create.", ParameterSetName = "PathFolder")]
+        [System.String]$Name,
+
+		[Parameter(Mandatory = $true, Position = 1, HelpMessage = "The Folder Path of the Parent Folder.", ParameterSetName = "PathFolder")]
+		[System.String]$ParentFolderPath,
+
+		[Parameter(Mandatory = $true, Position = 1, HelpMessage = "The SecretServerFolder object to server as the Parent Folder.", ParameterSetName = "SecretServerFolder")]
+		[PSTypeName('SecretServerFolder')]$ParentFolder,
+
+		[Parameter(Mandatory = $false, HelpMessage = "Should permissions inherit from parent folder.", ParameterSetName = "PathFolder")]
+		[System.Boolean]$InheritPermissions = $true,
+
+		[Parameter(Mandatory = $false, HelpMessage = "Should Secret policy inherit from parent folder.", ParameterSetName = "PathFolder")]
+		[System.Boolean]$InheritSecretPolicy = $true
+    )
+
+    # verifying an active CloudSuite connection
+    Verify-SecretServerConnection
+
+	# Body start
+	$BodyPayload = @{}
+	$BodyPayload.folderTypeId = 1
+
+	# adding to the body payload based on our parameter set
+	Switch ($PSCmdlet.ParameterSetName)
+	{
+		"RootFolder"
+		{
+			# preparing the body payload for a root folder creation
+			$BodyPayload.folderName          = $Name
+			$BodyPayload.parentFolderId      = -1
+			$BodyPayload.inheritPermissions  = $false
+			$BodyPayload.inheritSecretPolicy = $false
+			break
+		}# "RootFolder"
+		"PathFolder"
+		{
+			Try
+			{
+				# try to get the folder by its specified FolderPath
+				$Folder = Get-SecretServerFolder -FolderPath $ParentFolderPath
+
+				# preparing the body payload for a root folder creation
+				$BodyPayload.folderName          = $Name
+				$BodyPayload.parentFolderId      = $Folder.ID
+				$BodyPayload.inheritPermissions  = $InheritPermissions
+				$BodyPayload.inheritSecretPolicy = $InheritSecretPolicy
+				break
+			}
+			Catch
+			{
+				# we'll eventually refine this
+				throw ("Something went wrong with PathFolder")
+				$_
+			}
+		}# "PathFolder"
+	}# Switch ($PSCmdlet.ParameterSetName)
+
+	# make the call and attempt to create the folder
+	if ($apicall = Invoke-SecretServerAPI -Method POST -APICall "api/v1/folders" -Body ($BodyPayload | ConvertTo-Json))
+	{
+		# if creation was successful, convert the data into a SecretServerFolder object
+		$newfolder = ConvertFrom-DataToSecretServerFolder -DataFolders $apicall
+
+		# and return it as a SecretServerFolder class object
+		return $newfolder
+	}
+	else # otherwise
+	{
+		return $false
+	}
+}# function global:New-SecretServerFolder
+#endregion
+###########
