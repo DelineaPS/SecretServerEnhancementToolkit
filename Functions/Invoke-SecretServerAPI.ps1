@@ -74,15 +74,12 @@ function global:Invoke-SecretServerAPI
     }# Try
     Catch
     {
-        $LastError = [SSAPIException]::new("A SecretServerAPI error has occured. Check `$LastError for more information")
-        $LastError.APICall = $APICall
-        $LastError.Payload = $Body
-        $LastError.Response = $Response
-        $LastError.ErrorMessage = $_.Exception.Message
-		$LastError.Exception = $_
-        $global:LastError = $LastError
-        Throw $_.Exception
-    }
+		$e = New-Object SecretServerException -ArgumentList ("A SecretServerAPI error has occured. Check `$LastError for more information")
+        $e.AddAPIData($ApiCall, $Body, $response)
+		$e.AddExceptionData($_)
+        Write-Error $_.Exception.Message
+		return $e
+    }# Catch
 }# function global:Invoke-SecretServerAPI
 #endregion
 ###########
