@@ -186,8 +186,6 @@ function global:Get-SecretServerFolder
 		# zeroing counters
 		[System.Int32]$g, [System.Int32]$p = 0
 
-
-		$global:queryresults= $queryresults
 		# for each query object passed
 		foreach ($queryobject in $queryresults)
 		{
@@ -244,7 +242,7 @@ function global:Get-SecretServerFolder
 			$JobObject.PowerShell = $PowerShell
 		
 			$Jobs.Add($JobObject) | Out-Null
-		}# foreach ($cloudsuiteaccount in $CloudSuiteAccounts)
+		}# foreach ($queryobject in $queryresults)
 
 		foreach ($job in $jobs)
 		{
