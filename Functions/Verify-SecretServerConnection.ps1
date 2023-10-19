@@ -26,7 +26,7 @@ function global:Verify-SecretServerConnection
     expired connection.
     #>
 
-    if ($SecretServerConnection -eq $null)
+    if ($global:SecretServerConnection -eq $null)
     {
         throw ("There is no existing `$SecretServerConnection. Please use Connect-SecretServerInstance to connect to your Secret Server Instance. Exiting.")
     }
@@ -64,7 +64,9 @@ function global:Verify-SecretServerConnection
         }# Try
         Catch
         {
+			Write-Error $_
             throw ("There is no active, valid Secret Server Instance connection. Please use Connect-SecretServerInstance to re-connect to your Secret Server instance. Exiting.")
+
         }
     }# else
 }# function global:Verify-SecretServerConnection

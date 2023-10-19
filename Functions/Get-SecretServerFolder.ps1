@@ -162,84 +162,112 @@ function global:Get-SecretServerFolder
 		$queryresults.Add($basequery) | Out-Null
 	}
 
-	# multithread start
-	$RunspacePool = [runspacefactory]::CreateRunspacePool(1,12)
-	$RunspacePool.ApartmentState = 'STA'
-	$RunspacePool.ThreadOptions = 'ReUseThread'
-	$RunspacePool.Open()
+	Write-Verbose ("basesqlquery objects [{0}]" -f $queryresults.Count)
 
-	# processed ArrayList
-	$processed = New-Object System.Collections.ArrayList
-
-	# jobs ArrayList
-	$Jobs = New-Object System.Collections.ArrayList
-
-	# zeroing counters
-	[System.Int32]$g, [System.Int32]$p = 0
-
-	# for each CloudSuiteAccount passed
-	foreach ($queryobject in $queryresults)
+	# if $queryresults has more than 0 results
+	if (($queryresults | Measure-Object | Select-Object -ExpandProperty Count) -gt 0)
 	{
-		$PowerShell = [PowerShell]::Create()
-		$PowerShell.RunspacePool = $RunspacePool
-	
-		# Counter for the account objects
-		$g++; Write-Progress -Activity "Getting Folders" -Status ("{0} out of {1} Complete" -f $g,$queryresults.Count) -PercentComplete ($g/($queryresults | Measure-Object | Select-Object -ExpandProperty Count)*100)
+		# multithread start
+		$RunspacePool = [runspacefactory]::CreateRunspacePool(1,12)
+		$RunspacePool.ApartmentState = 'STA'
+		$RunspacePool.ThreadOptions = 'ReUseThread'
+		$RunspacePool.Open()
+
+		# synchronized arraylists to hold our error and account stacks
+		$errorstack = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList))
+		$folderstack = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList))
+    
+		# jobs ArrayList
+		$Jobs = New-Object System.Collections.ArrayList
+
+		# processed ArrayList
+		$processed = New-Object System.Collections.ArrayList
+
+		# zeroing counters
+		[System.Int32]$g, [System.Int32]$p = 0
+
+
+		$global:queryresults= $queryresults
+		# for each query object passed
+		foreach ($queryobject in $queryresults)
+		{
+			$PowerShell = [PowerShell]::Create()
+			$PowerShell.RunspacePool = $RunspacePool
 		
-		# for each script in our SecretServerEnhancementToolkitScriptBlocks
-		foreach ($script in $global:SecretServerEnhancementToolkitScriptBlocks)
-		{
-			# add it to this thread as a script, this makes all classes and functions available to this thread
-			[void]$PowerShell.AddScript($script.ScriptBlock)
-		}
-		[void]$PowerShell.AddScript(
-		{
-			Param
-			(
-				$SecretServerConnection,
-				$SecretServerSessionInformation,
-				$queryobject
-			)
-			$global:SecretServerConnection                       = $SecretServerConnection
-			$global:SecretServerSessionInformation               = $SecretServerSessionInformation
-
-			$folder = New-Object SecretServerFolder -ArgumentList ($queryobject)
-
-			$folderpermissions = Get-SecretServerFolderPermission -Id $folder.Id
-
-			$folder.addFolderPermission($folderpermissions)
-
-			return $folder
-	
-		})# [void]$PowerShell.AddScript(
-		[void]$PowerShell.AddParameter('SecretServerConnection',$global:SecretServerConnection)
-		[void]$PowerShell.AddParameter('SecretServerSessionInformation',$global:SecretServerSessionInformation)
-		[void]$PowerShell.AddParameter('queryobject',$queryobject)
+			# Counter for the account objects
+			$g++; Write-Progress -Activity "Getting Folders" -Status ("{0} out of {1} Complete" -f $g,$queryresults.Count) -PercentComplete ($g/($queryresults | Measure-Object | Select-Object -ExpandProperty Count)*100)
 			
-		$JobObject = @{}
-		$JobObject.Runspace   = $PowerShell.BeginInvoke()
-		$JobObject.PowerShell = $PowerShell
-	
-		$Jobs.Add($JobObject) | Out-Null
-	}# foreach ($cloudsuiteaccount in $CloudSuiteAccounts)
+			# for each script in our SecretServerEnhancementToolkitScriptBlocks
+			foreach ($script in $global:SecretServerEnhancementToolkitScriptBlocks)
+			{
+				# add it to this thread as a script, this makes all classes and functions available to this thread
+				[void]$PowerShell.AddScript($script.ScriptBlock)
+			}
+			[void]$PowerShell.AddScript(
+			{
+				Param
+				(
+					$SecretServerConnection,
+					$SecretServerSessionInformation,
+					$queryobject,
+					$errorstack,
+					$folderstack
+				)
+				$global:SecretServerConnection                       = $SecretServerConnection
+				$global:SecretServerSessionInformation               = $SecretServerSessionInformation
 
-	foreach ($job in $jobs)
-	{
-		# Counter for the job objects
-		$p++; Write-Progress -Activity "Processing Folders" -Status ("{0} out of {1} Complete" -f $p,$jobs.Count) -PercentComplete ($p/($jobs | Measure-Object | Select-Object -ExpandProperty Count)*100)
+				Try
+				{
+					# create a new Secret Server Folder object
+					$folder = New-Object SecretServerFolder -ArgumentList ($queryobject)
+					$folderpermissions = Get-SecretServerFolderPermission -Id $folder.Id
+					$folder.addFolderPermission($folderpermissions)
+					$folderstack.add($folder) | Out-Null
+				}# Try
+				Catch
+				{
+					# if an error occurred during New-Object, create a new SecretServerException and return that with the relevant data
+					$e = New-Object SecretServerException -ArgumentList ("Error during New SecretServerFolder object.")
+					$e.AddExceptionData($_)
+					$e.AddData("queryobject",$queryobject)
+					$errorstack.Add($e) | Out-Null
+				}# Catch
+			})# [void]$PowerShell.AddScript(
+			[void]$PowerShell.AddParameter('SecretServerConnection',$global:SecretServerConnection)
+			[void]$PowerShell.AddParameter('SecretServerSessionInformation',$global:SecretServerSessionInformation)
+			[void]$PowerShell.AddParameter('queryobject',$queryobject)
+			[void]$PowerShell.AddParameter('errorstack',$errorstack)
+			[void]$PowerShell.AddParameter('folderstack',$folderstack)
+				
+			$JobObject = @{}
+			$JobObject.Runspace   = $PowerShell.BeginInvoke()
+			$JobObject.PowerShell = $PowerShell
 		
-		$processed.Add($job.powershell.EndInvoke($job.RunSpace)) | Out-Null
-		$job.PowerShell.Dispose()
-	}# foreach ($job in $jobs)
+			$Jobs.Add($JobObject) | Out-Null
+		}# foreach ($cloudsuiteaccount in $CloudSuiteAccounts)
 
-	# closing the pool
-	$RunspacePool.Close()
-	$RunspacePool.Dispose()
+		foreach ($job in $jobs)
+		{
+			# Counter for the job objects
+			$p++; Write-Progress -Activity "Processing Folders" -Status ("{0} out of {1} Complete" -f $p,$jobs.Count) -PercentComplete ($p/($jobs | Measure-Object | Select-Object -ExpandProperty Count)*100)
+			
+			$processed.Add($job.powershell.EndInvoke($job.RunSpace)) | Out-Null
+			$job.PowerShell.Dispose()
+		}# foreach ($job in $jobs)
 
-	# converting back to SecretServerFolder because multithreaded objects return an Automation object Type
-	$secretserverfolders = ConvertFrom-DataToSecretServerFolder -DataFolders $processed
+		# closing the pool
+		$RunspacePool.Close()
+		$RunspacePool.Dispose()
+	}# if (($queryresults | Measure-Object | Select-Object -ExpandProperty Count) -gt 0)
+	else
+    {
+        return $false
+    }
 
-	return $secretserverfolders
+	# setting all the errored into the LastErrorStack
+	$global:LastErrorStack = $errorstack
+
+	return $folderstack
 }# function global:Get-SecretServerFolder
 #endregion
 ###########
