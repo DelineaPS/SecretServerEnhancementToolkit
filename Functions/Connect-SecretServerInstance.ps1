@@ -86,7 +86,7 @@ function global:Connect-SecretServerInstance
 	}
 	Catch
 	{
-        $LastError = New-Object SSAPIException -ArgumentList ("A SecretServerAPI error has occured. Check `$LastError for more information")
+        $LastError = New-Object SecretServerException -ArgumentList ("A SecretServerAPI error has occured. Check `$LastError for more information")
 		$LastError.APICall = $APICall
         $LastError.Payload = $Body
         $LastError.Response = $InitialResponse
